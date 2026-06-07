@@ -3,6 +3,12 @@
 import { useMemo, useState } from "react";
 
 import {
+  BATCH_RECORD_ROWS,
+  type BatchRecordAutomaticValueKey,
+  type BatchRecordInputKey,
+  type BatchRecordInputType,
+} from "~/lib/batch-record-fields";
+import {
   calculateBatch,
   formatDateInputValue,
   formatGrams,
@@ -15,27 +21,19 @@ import {
 } from "~/lib/calculator";
 import { MEDIA_DATABASE, getMediaByCode } from "~/lib/media-database";
 
-type BatchRecordFields = {
-  preparedBy: string;
-  checkedBy: string;
-  date: string;
-  mediaLot: string;
-  autoclaveCycle: string;
-  initialPh: string;
-  finalPh: string;
-  comments: string;
-};
+type BatchRecordFields = Record<BatchRecordInputKey, string>;
 
 const emptyRecordFields: BatchRecordFields = {
+  lotNumber: "",
+  mediaExpirationDate: "",
+  actualWeight: "",
+  actualPh: "",
+  bottleNumber: "",
   preparedBy: "",
   checkedBy: "",
-  date: "",
-  mediaLot: "",
-  autoclaveCycle: "",
-  initialPh: "",
-  finalPh: "",
-  comments: "",
 };
+
+const AUTOCLAVE_CYCLE = "121°C 20 minutes";
 
 export function MediaPreparationCalculator() {
   const today = useMemo(() => new Date(), []);
@@ -44,6 +42,7 @@ export function MediaPreparationCalculator() {
   );
   const [containerCountText, setContainerCountText] = useState("");
   const [roundToNearestHundred, setRoundToNearestHundred] = useState(false);
+  const [roundToNearestThousand, setRoundToNearestThousand] = useState(false);
   const [preparationDateText, setPreparationDateText] = useState(
     formatDateInputValue(today),
   );
@@ -59,6 +58,7 @@ export function MediaPreparationCalculator() {
     media: selectedMedia,
     containerCount: Number.isFinite(containerCount) ? containerCount : 0,
     roundToNearestHundred,
+    roundToNearestThousand,
     preparationDate,
   });
   const instructions = generateInstructionText(calculation);
@@ -70,54 +70,57 @@ export function MediaPreparationCalculator() {
   async function copyInstructions() {
     await navigator.clipboard.writeText(instructions);
     setCopyStatus("Instructions copied");
+    setTimeout(() => setCopyStatus(""), 3000);
   }
 
   return (
-    <main className="min-h-screen bg-[var(--bench-surface)] px-4 py-6 text-[var(--ink)] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-5 flex flex-col gap-2 print:hidden">
-          <p className="text-sm font-semibold tracking-[0.12em] text-[var(--teal)] uppercase">
-            Laboratory calculator
-          </p>
-          <h1 className="text-2xl font-semibold sm:text-3xl">
-            Media Preparation Calculator
-          </h1>
-          <p className="max-w-3xl text-sm text-[var(--muted)]">
-            Select a media, enter the container count, and generate preparation
-            quantities with a printable batch sheet.
-          </p>
-        </header>
+    <main className="lab-layout">
+      <header className="lab-header print:hidden">
+        <p className="lab-header__eyebrow">Laboratory Calculator</p>
+        <h1 className="lab-header__title">Media Preparation Calculator</h1>
+        <p className="lab-header__desc">
+          Select a media type, enter the container count, and generate
+          preparation quantities with a printable SOP batch sheet.
+        </p>
+      </header>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(320px,0.82fr)_minmax(0,1.18fr)]">
-          <section className="space-y-5 print:hidden">
-            <InputCard
-              mediaCode={mediaCode}
-              containerCountText={containerCountText}
-              roundToNearestHundred={roundToNearestHundred}
-              preparationDateText={preparationDateText}
-              onMediaChange={setMediaCode}
-              onContainerCountChange={setContainerCountText}
-              onRoundChange={setRoundToNearestHundred}
-              onPreparationDateChange={setPreparationDateText}
-              onCalculate={() => setHasCalculated(true)}
-            />
-            <SummaryCard
-              calculation={calculation}
-              hasCalculated={hasCalculated}
-            />
-          </section>
-
-          <BatchSheet
+      <div className="lab-grid">
+        <section className="space-y-[1.25rem] print:hidden">
+          <InputCard
+            mediaCode={mediaCode}
+            containerCountText={containerCountText}
+            roundToNearestHundred={roundToNearestHundred}
+            roundToNearestThousand={roundToNearestThousand}
+            preparationDateText={preparationDateText}
+            onMediaChange={setMediaCode}
+            onContainerCountChange={setContainerCountText}
+            onRoundHundredChange={(checked) => {
+              setRoundToNearestHundred(checked);
+              if (checked) setRoundToNearestThousand(false);
+            }}
+            onRoundThousandChange={(checked) => {
+              setRoundToNearestThousand(checked);
+              if (checked) setRoundToNearestHundred(false);
+            }}
+            onPreparationDateChange={setPreparationDateText}
+            onCalculate={() => setHasCalculated(true)}
+          />
+          <SummaryCard
             calculation={calculation}
             hasCalculated={hasCalculated}
-            instructions={instructions}
-            recordFields={recordFields}
-            copyStatus={copyStatus}
-            onCopyInstructions={() => void copyInstructions()}
-            onPrint={() => window.print()}
-            onRecordFieldChange={updateRecordField}
           />
-        </div>
+        </section>
+
+        <BatchSheet
+          calculation={calculation}
+          hasCalculated={hasCalculated}
+          instructions={instructions}
+          recordFields={recordFields}
+          copyStatus={copyStatus}
+          onCopyInstructions={() => void copyInstructions()}
+          onPrint={() => window.print()}
+          onRecordFieldChange={updateRecordField}
+        />
       </div>
     </main>
   );
@@ -127,10 +130,12 @@ function InputCard(props: {
   mediaCode: string;
   containerCountText: string;
   roundToNearestHundred: boolean;
+  roundToNearestThousand: boolean;
   preparationDateText: string;
   onMediaChange: (value: string) => void;
   onContainerCountChange: (value: string) => void;
-  onRoundChange: (value: boolean) => void;
+  onRoundHundredChange: (value: boolean) => void;
+  onRoundThousandChange: (value: boolean) => void;
   onPreparationDateChange: (value: string) => void;
   onCalculate: () => void;
 }) {
@@ -138,7 +143,10 @@ function InputCard(props: {
 
   return (
     <section className="lab-card">
-      <h2 className="card-title">Input Section</h2>
+      <div className="card-header">
+        <h2 className="card-title">Parameters</h2>
+      </div>
+
       <div className="field-group">
         <label htmlFor="media">Media Type</label>
         <select
@@ -153,6 +161,7 @@ function InputCard(props: {
           ))}
         </select>
       </div>
+
       <div className="field-group">
         <label htmlFor="container-count">
           Number of {pluralize(selectedMedia.containerType, 2)}
@@ -162,10 +171,12 @@ function InputCard(props: {
           min="0"
           inputMode="numeric"
           type="number"
+          placeholder="e.g. 20"
           value={props.containerCountText}
           onChange={(event) => props.onContainerCountChange(event.target.value)}
         />
       </div>
+
       <div className="field-group">
         <label htmlFor="preparation-date">Preparation Date</label>
         <input
@@ -177,14 +188,29 @@ function InputCard(props: {
           }
         />
       </div>
+
       <label className="checkbox-row">
         <input
           type="checkbox"
           checked={props.roundToNearestHundred}
-          onChange={(event) => props.onRoundChange(event.target.checked)}
+          onChange={(event) =>
+            props.onRoundHundredChange(event.target.checked)
+          }
         />
         <span>Round final volume up to nearest 100 mL</span>
       </label>
+
+      <label className="checkbox-row">
+        <input
+          type="checkbox"
+          checked={props.roundToNearestThousand}
+          onChange={(event) =>
+            props.onRoundThousandChange(event.target.checked)
+          }
+        />
+        <span>Round final volume up to nearest 1000 mL</span>
+      </label>
+
       <button
         className="primary-button w-full"
         type="button"
@@ -205,14 +231,21 @@ function SummaryCard({
 }) {
   return (
     <section className="lab-card">
-      <h2 className="card-title">Calculation Summary</h2>
+      <div className="card-header">
+        <h2 className="card-title">Calculation Summary</h2>
+        {hasCalculated && <span className="card-badge">Ready</span>}
+      </div>
+
       {!hasCalculated ? (
-        <p className="text-sm text-[var(--muted)]">
-          Enter a container count and click Calculate.
-        </p>
+        <div className="empty-state">
+          <span className="empty-state__icon" aria-hidden="true">⚗</span>
+          <p className="empty-state__text">
+            Enter a container count and click Calculate to see results.
+          </p>
+        </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid gap-2 text-sm">
+          <dl className="grid gap-0">
             <SummaryLine label="Media" value={calculation.media.name} />
             <SummaryLine
               label="Containers"
@@ -248,9 +281,9 @@ function SummaryCard({
                     }`
               }
             />
-          </div>
+          </dl>
 
-          <QuantityList title="Water Requirements">
+          <QuantityGroup title="Water Requirements">
             {calculation.waterRequirements.map((line) => (
               <SummaryLine
                 key={line.label}
@@ -258,10 +291,10 @@ function SummaryCard({
                 value={formatVolume(line.volumeMl)}
               />
             ))}
-          </QuantityList>
+          </QuantityGroup>
 
           {calculation.additives.length > 0 ? (
-            <QuantityList title="Additives Required">
+            <QuantityGroup title="Additives Required">
               {calculation.additives.map((additive) => (
                 <SummaryLine
                   key={additive.name}
@@ -269,7 +302,7 @@ function SummaryCard({
                   value={formatVolume(additive.volumeMl)}
                 />
               ))}
-            </QuantityList>
+            </QuantityGroup>
           ) : null}
 
           {calculation.warnings.length > 0 ? (
@@ -302,16 +335,12 @@ function BatchSheet({
 }) {
   return (
     <section className="lab-card batch-sheet">
-      <div className="mb-4 flex flex-col gap-3 border-b border-[var(--rule)] pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-bold tracking-[0.14em] text-[var(--teal)] uppercase">
-            MEDIA PREPARATION SHEET
-          </p>
-          <h2 className="mt-1 text-xl font-semibold">
-            {calculation.media.name}
-          </h2>
+      <div className="batch-header">
+        <div className="batch-header__meta">
+          <p className="batch-header__eyebrow">Media Preparation Sheet</p>
+          <h2 className="batch-header__title">{calculation.media.name}</h2>
         </div>
-        <div className="flex flex-wrap gap-2 print:hidden">
+        <div className="batch-header__actions print:hidden">
           <button
             className="secondary-button"
             type="button"
@@ -332,15 +361,16 @@ function BatchSheet({
       </div>
 
       {!hasCalculated ? (
-        <p className="text-sm text-[var(--muted)] print:hidden">
-          The batch sheet will populate after calculation.
-        </p>
+        <div className="empty-state print:hidden">
+          <span className="empty-state__icon" aria-hidden="true">📋</span>
+          <p className="empty-state__text">
+            The batch sheet will populate after you click Calculate.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-[1rem]">
           {copyStatus ? (
-            <p className="text-sm font-semibold text-[var(--teal)] print:hidden">
-              {copyStatus}
-            </p>
+            <p className="copy-confirm print:hidden">{copyStatus}</p>
           ) : null}
 
           {calculation.warnings.length > 0 ? (
@@ -348,7 +378,7 @@ function BatchSheet({
           ) : null}
 
           <SheetSection title="Batch Details">
-            <SheetGrid>
+            <dl className="sheet-grid">
               <SummaryLine label="Media" value={calculation.media.name} />
               <SummaryLine
                 label="Batch Number"
@@ -380,6 +410,7 @@ function BatchSheet({
               <SummaryLine
                 label="Final Volume"
                 value={formatVolume(calculation.finalVolumeMl)}
+                isEmphasized
               />
               <SummaryLine
                 label="Additional Overage"
@@ -398,12 +429,18 @@ function BatchSheet({
               {calculation.phRange ? (
                 <SummaryLine label="pH Range" value={calculation.phRange} />
               ) : null}
-            </SheetGrid>
+              {calculation.media.requiresAutoclaving ? (
+                <SummaryLine
+                  label="Autoclave Cycle"
+                  value={AUTOCLAVE_CYCLE}
+                />
+              ) : null}
+            </dl>
           </SheetSection>
 
           {calculation.additives.length > 0 ? (
             <SheetSection title="Additives Required">
-              <SheetGrid>
+              <dl className="sheet-grid">
                 {calculation.additives.map((additive) => (
                   <SummaryLine
                     key={additive.name}
@@ -411,12 +448,12 @@ function BatchSheet({
                     value={formatVolume(additive.volumeMl)}
                   />
                 ))}
-              </SheetGrid>
+              </dl>
             </SheetSection>
           ) : null}
 
           <SheetSection title="Water Requirements">
-            <SheetGrid>
+            <dl className="sheet-grid">
               {calculation.waterRequirements.map((line) => (
                 <SummaryLine
                   key={line.label}
@@ -424,71 +461,57 @@ function BatchSheet({
                   value={formatVolume(line.volumeMl)}
                 />
               ))}
-            </SheetGrid>
+            </dl>
           </SheetSection>
 
           <SheetSection title="Preparation Procedure">
-            <ol className="list-decimal space-y-2 pl-5 text-sm leading-6">
+            <ol className="prep-steps">
               {instructions
                 .split("\n")
                 .filter((line) => /^\d+\./.test(line))
-                .map((line) => (
-                  <li key={line}>{line.replace(/^\d+\.\s*/, "")}</li>
+                .map((line, i) => (
+                  <li key={i}>{line.replace(/^\d+\.\s*/, "")}</li>
                 ))}
             </ol>
           </SheetSection>
 
           <SheetSection title="Batch Record Fields">
             <div className="grid gap-3 sm:grid-cols-2">
-              <RecordField
-                label="Prepared By"
-                value={recordFields.preparedBy}
-                onChange={(value) => onRecordFieldChange("preparedBy", value)}
-              />
-              <RecordField
-                label="Checked By"
-                value={recordFields.checkedBy}
-                onChange={(value) => onRecordFieldChange("checkedBy", value)}
-              />
-              <RecordField
-                label="Date"
-                value={recordFields.date}
-                onChange={(value) => onRecordFieldChange("date", value)}
-              />
-              <RecordField
-                label="Media Lot"
-                value={recordFields.mediaLot}
-                onChange={(value) => onRecordFieldChange("mediaLot", value)}
-              />
-              <RecordField
-                label="Autoclave Cycle"
-                value={recordFields.autoclaveCycle}
-                onChange={(value) =>
-                  onRecordFieldChange("autoclaveCycle", value)
-                }
-              />
-              <RecordField
-                label="Initial pH"
-                value={recordFields.initialPh}
-                onChange={(value) => onRecordFieldChange("initialPh", value)}
-              />
-              <RecordField
-                label="Final pH"
-                value={recordFields.finalPh}
-                onChange={(value) => onRecordFieldChange("finalPh", value)}
-              />
-              <RecordField
-                label="Comments"
-                value={recordFields.comments}
-                isTextarea
-                onChange={(value) => onRecordFieldChange("comments", value)}
-              />
+              {BATCH_RECORD_ROWS.map((row) =>
+                row.kind === "automatic" ? (
+                  <SummaryLine
+                    key={row.label}
+                    label={row.label}
+                    value={getBatchRecordAutomaticValue(
+                      row.valueKey,
+                      calculation,
+                    )}
+                  />
+                ) : (
+                  <RecordField
+                    key={row.key}
+                    label={row.label}
+                    inputType={row.inputType}
+                    value={recordFields[row.key]}
+                    onChange={(value) => onRecordFieldChange(row.key, value)}
+                  />
+                ),
+              )}
             </div>
           </SheetSection>
         </div>
       )}
     </section>
   );
+}
+
+function getBatchRecordAutomaticValue(
+  valueKey: BatchRecordAutomaticValueKey,
+  calculation: BatchCalculation,
+): string {
+  if (valueKey === "mediaName") return calculation.media.name;
+  if (valueKey === "batchNumber") return calculation.batchNumber;
+  return formatRecordDate(calculation.expirationDate);
 }
 
 function SummaryLine({
@@ -502,21 +525,13 @@ function SummaryLine({
 }) {
   return (
     <div className="summary-line">
-      <dt className="text-[var(--muted)]">{label}</dt>
-      <dd
-        className={
-          isEmphasized
-            ? "font-bold text-[var(--teal)]"
-            : "font-semibold text-[var(--ink)]"
-        }
-      >
-        {value}
-      </dd>
+      <dt>{label}</dt>
+      <dd className={isEmphasized ? "is-emphasized" : ""}>{value}</dd>
     </div>
   );
 }
 
-function QuantityList({
+function QuantityGroup({
   title,
   children,
 }: {
@@ -524,9 +539,9 @@ function QuantityList({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <h3 className="mb-2 text-sm font-bold">{title}</h3>
-      <dl className="grid gap-2 text-sm">{children}</dl>
+    <div className="quantity-group">
+      <p className="quantity-group__header">{title}</p>
+      <dl className="quantity-group__body">{children}</dl>
     </div>
   );
 }
@@ -546,19 +561,18 @@ function SheetSection({
   );
 }
 
-function SheetGrid({ children }: { children: React.ReactNode }) {
-  return <dl className="grid gap-2 sm:grid-cols-2">{children}</dl>;
-}
-
 function WarningList({ warnings }: { warnings: string[] }) {
   return (
-    <div className="warning-box">
-      <p className="font-bold">Warnings</p>
-      <ul className="mt-1 list-disc space-y-1 pl-5">
-        {warnings.map((warning) => (
-          <li key={warning}>{warning}</li>
-        ))}
-      </ul>
+    <div className="warning-box" role="alert">
+      <span className="warning-box__icon" aria-hidden="true">⚠</span>
+      <div className="warning-box__body">
+        <p className="warning-box__title">Warnings</p>
+        <ul>
+          {warnings.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -566,12 +580,12 @@ function WarningList({ warnings }: { warnings: string[] }) {
 function RecordField({
   label,
   value,
-  isTextarea = false,
+  inputType,
   onChange,
 }: {
   label: string;
   value: string;
-  isTextarea?: boolean;
+  inputType: BatchRecordInputType;
   onChange: (value: string) => void;
 }) {
   const controlId = label.toLowerCase().replace(/\s+/g, "-");
@@ -579,21 +593,12 @@ function RecordField({
   return (
     <div className="field-group record-field">
       <label htmlFor={controlId}>{label}</label>
-      {isTextarea ? (
-        <textarea
-          id={controlId}
-          rows={3}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      ) : (
-        <input
-          id={controlId}
-          type="text"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      )}
+      <input
+        id={controlId}
+        type={inputType}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
       <div className="record-print-line" aria-hidden="true">
         {value}
       </div>

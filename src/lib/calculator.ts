@@ -8,6 +8,7 @@ export type BatchInput = {
   media: MediaEntry;
   containerCount: number;
   roundToNearestHundred: boolean;
+  roundToNearestThousand?: boolean;
   preparationDate: Date;
 };
 
@@ -40,9 +41,7 @@ export type BatchCalculation = {
 
 export function calculateBatch(input: BatchInput): BatchCalculation {
   const rawVolumeMl = input.containerCount * input.media.fillVolumeMl;
-  const finalVolumeMl = input.roundToNearestHundred
-    ? roundUpToNearestHundred(rawVolumeMl)
-    : rawVolumeMl;
+  const finalVolumeMl = getRoundedFinalVolume(rawVolumeMl, input);
   const warnings = getWarnings(
     input.media,
     input.containerCount,
@@ -75,6 +74,16 @@ export function calculateBatch(input: BatchInput): BatchCalculation {
 
 export function roundUpToNearestHundred(value: number): number {
   return Math.ceil(value / 100) * 100;
+}
+
+export function roundUpToNearestThousand(value: number): number {
+  return Math.ceil(value / 1000) * 1000;
+}
+
+function getRoundedFinalVolume(value: number, input: BatchInput): number {
+  if (input.roundToNearestThousand) return roundUpToNearestThousand(value);
+  if (input.roundToNearestHundred) return roundUpToNearestHundred(value);
+  return value;
 }
 
 export function roundPowderGrams(

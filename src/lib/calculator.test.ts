@@ -43,6 +43,20 @@ describe("calculateBatch", () => {
     expect(result.overageMl).toBe(50);
   });
 
+  it("rounds final volume up to the nearest 1000 mL when requested", () => {
+    const result = calculateBatch({
+      media: getMediaByCode("PBS-RM"),
+      containerCount: 25,
+      roundToNearestHundred: false,
+      roundToNearestThousand: true,
+      preparationDate: new Date(2026, 5, 4),
+    });
+
+    expect(result.rawVolumeMl).toBe(2250);
+    expect(result.finalVolumeMl).toBe(3000);
+    expect(result.overageMl).toBe(750);
+  });
+
   it("splits WFI and Ultrapure Water from final volume after rounding", () => {
     const result = calculateBatch({
       media: getMediaByCode("TSA"),
