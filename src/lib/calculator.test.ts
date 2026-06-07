@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { getMediaByCode, TEMP_PH_RANGE } from "./media-database";
+import {
+  getMediaByCode,
+  MEDIA_DATABASE,
+} from "./media-database";
 import {
   calculateBatch,
   formatBatchNumber,
   formatRecordDate,
+  generateInstructionText,
   getExpirationDate,
 } from "./calculator";
 
@@ -94,6 +98,19 @@ describe("calculateBatch", () => {
     ]);
   });
 
+  it("includes pH verification steps for additive-only PBS media", () => {
+    const result = calculateBatch({
+      media: getMediaByCode("PBS-BIOBURDEN"),
+      containerCount: 10,
+      roundToNearestHundred: false,
+      preparationDate: new Date(2026, 5, 4),
+    });
+
+    expect(generateInstructionText(result)).toContain(
+      "Verify pH is within 7.4-7.49.",
+    );
+  });
+
   it("flags invalid zero container count", () => {
     const result = calculateBatch({
       media: getMediaByCode("TSA"),
@@ -108,7 +125,7 @@ describe("calculateBatch", () => {
     );
   });
 
-  it("keeps temporary pH labels visible for pH-verified media", () => {
+  it("keeps approved pH ranges visible for pH-verified media", () => {
     const result = calculateBatch({
       media: getMediaByCode("TSA"),
       containerCount: 1,
@@ -116,10 +133,71 @@ describe("calculateBatch", () => {
       preparationDate: new Date(2026, 5, 4),
     });
 
-    expect(result.phRange).toBe(TEMP_PH_RANGE);
-    expect(result.warnings).toContain(
+    expect(result.phRange).toBe("7.10-7.50");
+    expect(result.warnings).not.toContain(
       "pH range is temporary. Verify the approved range before laboratory use.",
     );
+  });
+});
+
+describe("media database", () => {
+  it("keeps media options alphabetical by display name so selection is scannable", () => {
+    const mediaNames = MEDIA_DATABASE.map((media) => media.name);
+
+    expect(mediaNames).toEqual(
+      [...mediaNames].sort((a, b) => a.localeCompare(b)),
+    );
+  });
+
+  it("uses the approved media calculations and pH ranges", () => {
+    expect(getMediaByCode("TSP")).toMatchObject({
+      gramsPerLiter: 45.7,
+      phRange: "7.10-7.50",
+    });
+    expect(getMediaByCode("TSA")).toMatchObject({
+      fillVolumeMl: 800,
+      gramsPerLiter: 40,
+      phRange: "7.10-7.50",
+    });
+    expect(getMediaByCode("SDA")).toMatchObject({
+      fillVolumeMl: 800,
+      gramsPerLiter: 65,
+      phRange: "5.40-5.80",
+    });
+    expect(getMediaByCode("PBS-BIOBURDEN")).toMatchObject({
+      fillVolumeMl: 100,
+      phRange: "7.4-7.49",
+    });
+    expect(getMediaByCode("PBS-RM")).toMatchObject({
+      fillVolumeMl: 90,
+      phRange: "7.4-7.49",
+    });
+    expect(getMediaByCode("LB")).toMatchObject({
+      fillVolumeMl: 9,
+      gramsPerLiter: 26,
+      phRange: "6.7-7.10",
+    });
+    expect(getMediaByCode("R2A")).toMatchObject({
+      fillVolumeMl: 800,
+      gramsPerLiter: 18.2,
+      phRange: "7.10-7.40",
+    });
+    expect(getMediaByCode("MLA")).toMatchObject({
+      fillVolumeMl: 800,
+      gramsPerLiter: 52.1,
+      phRange: null,
+    });
+    expect(getMediaByCode("MLA").additives).toEqual([
+      { name: "Polysorbate", mlPerLiter: 7 },
+    ]);
+    expect(getMediaByCode("MLB")).toMatchObject({
+      fillVolumeMl: 90,
+      gramsPerLiter: 37.8,
+      phRange: null,
+    });
+    expect(getMediaByCode("MLB").additives).toEqual([
+      { name: "Polysorbate", mlPerLiter: 5 },
+    ]);
   });
 });
 

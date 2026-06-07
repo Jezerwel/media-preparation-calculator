@@ -261,6 +261,15 @@ function getAdditiveOnlySteps(calculation: BatchCalculation): string[] {
 
   steps.push("Mix until fully uniform.");
   steps.push("Bring to final volume if needed.");
+
+  if (calculation.media.requiresPhVerification) {
+    steps.push(
+      `Verify pH is within ${calculation.phRange ?? "specification"}.`,
+    );
+    steps.push("If pH is low, adjust with NaOH.");
+    steps.push("If pH is high, adjust with HCl.");
+  }
+
   steps.push("Before dispensing, swirl the container at least 5 times.");
   steps.push("Dispense into containers.");
   steps.push("Inspect for clarity and proper fill volume.");
